@@ -1,0 +1,6 @@
+[submodule "starter/lib/reactive-lib-omni"]
+	path = starter/lib/reactive-lib-omni
+	url = https://github.com/Reactive-Network/reactive-lib-omni
+[submodule "starter/lib/forge-std"]
+	path = starter/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
