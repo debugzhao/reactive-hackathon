@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web-devnet",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "queue-vault/web", "run", "dev:devnet"],
+      "port": 5174
+    }
+  ]
+}
