@@ -13,3 +13,6 @@
 [submodule "queue-vault/lib/openzeppelin-contracts"]
 	path = queue-vault/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "queue-vault/web"]
+	path = queue-vault/web
+	url = https://github.com/debugzhao/queuevault-scan.git

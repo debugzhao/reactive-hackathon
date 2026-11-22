@@ -23,7 +23,7 @@ Base Sepolia  QueueSettler.onSettle()   ③ vault.settleQueue(N)：抢回缺口 
 | [`script/Deploy.s.sol`](script/Deploy.s.sol) | 部署与演示步骤，地址读写 `deployments/*.json` |
 | [`bin/`](bin/) | `deploy.sh` `loop.sh` `status.sh` `trace.sh` `verify.sh` `devnet.sh` |
 | [`bench/`](bench/) | TypeScript + viem：延迟基准、抢流动性实验、轮询对照组、报告、演示看板 |
-| [`web/`](web/) | QueueVault Scan：只读实时看板（Vite + React + viem），演示视频主画面 |
+| [`web/`](web/) | QueueVault Scan：只读实时看板（Vite + React + viem），演示视频主画面。**git submodule**，独立仓库 [debugzhao/queuevault-scan](https://github.com/debugzhao/queuevault-scan) |
 
 | 合约 | 链 | 作用 |
 |---|---|---|
@@ -105,7 +105,16 @@ npm run report -- --k 2                          # 生成 results/REPORT.md（�
 
 ## 4. 前端看板（QueueVault Scan）
 
-只读实时看板，不接钱包、不发交易。页面上的数字全部来自 RPC 实时读取；唯一的静态数据是构建时打包进来的 `bench/results/**/*.csv`。
+只读实时看板，不接钱包、不发交易。页面上的数字全部来自 RPC 实时读取；唯一的静态数据是构建时打包进来的 `bench/results/**/*.csv`。支持中英文：右上角切换，或在 URL 上加 `?lang=zh` / `?lang=en`。
+
+> 📦 前端是独立仓库 [debugzhao/queuevault-scan](https://github.com/debugzhao/queuevault-scan)，以 git submodule 挂在 `queue-vault/web`。它在构建时读取上一级的 `deployments/` 和 `bench/results/`，所以要在本仓库里使用：
+>
+> ```bash
+> git clone --recursive https://github.com/debugzhao/reactive-hackathon.git   # 新 clone
+> git submodule update --init queue-vault/web                                 # 已 clone 过
+> ```
+>
+> 改前端时在 `queue-vault/web` 里提交并推送到前端仓库，再回到本仓库提交子模块指针（`git add queue-vault/web`）。
 
 | 区块 | 内容 |
 |---|---|
