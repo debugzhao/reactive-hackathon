@@ -1,6 +1,7 @@
 // Queue Heatmap：最近 120 个赎回请求的状态（已结清 / 部分兑付 / 待兑付 / 转入 claimable）
 import type { RedeemRequest } from "../chain";
 import { clock, short, usdc } from "../format";
+import { type T, useI18n } from "../i18n";
 import type { ScanState } from "../useScan";
 import { HEATMAP_CELLS } from "../useScan";
 import { Badge, GlassCard, Pill, Tooltip, useTooltip } from "./ui";
@@ -8,6 +9,7 @@ import { Badge, GlassCard, Pill, Tooltip, useTooltip } from "./ui";
 type Status = "settled" | "partial" | "pending" | "claimable";
 
 export function Heatmap({ scan, selected, highlight }: { scan: ScanState; selected?: number; highlight: boolean }) {
+  const { t } = useI18n();
   const deferred = new Set(scan.events.filter((e) => e.name === "PayoutDeferred").map((e) => Number(e.args.id)));
   const status = (r: RedeemRequest): Status =>
     deferred.has(r.id) ? "claimable" : r.assetsRemaining === 0n ? "settled" : r.assetsRemaining < r.assetsTotal ? "partial" : "pending";
@@ -19,14 +21,14 @@ export function Heatmap({ scan, selected, highlight }: { scan: ScanState; select
   return (
     <GlassCard
       id="heatmap"
-      title="Queue heatmap"
-      sub={`Last ${HEATMAP_CELLS} redemption requests · brighter = settled faster`}
+      title={t("hm.title")}
+      sub={t("hm.sub", { n: HEATMAP_CELLS })}
       highlight={highlight}
       error={scan.errors.base}
-      right={<Pill small>Head #{head?.toString() ?? "—"}</Pill>}
+      right={<Pill small>{t("hm.head", { h: head?.toString() ?? "—" })}</Pill>}
     >
       {scan.requests.length === 0 ? (
-        <div className="empty">No redemption requests yet.</div>
+        <div className="empty">{t("hm.empty")}</div>
       ) : (
         <div className="heat" ref={tt.ref} onMouseLeave={tt.hide}>
           {scan.requests.map((r) => {
@@ -44,7 +46,7 @@ export function Heatmap({ scan, selected, highlight }: { scan: ScanState; select
           })}
           {tt.tip && (
             <Tooltip x={tt.tip.x} y={tt.tip.y} width={tt.ref.current?.clientWidth ?? 500}>
-              <RequestTip r={tt.tip.data} st={status(tt.tip.data)} />
+              <RequestTip r={tt.tip.data} st={status(tt.tip.data)} t={t} />
             </Tooltip>
           )}
         </div>
@@ -52,51 +54,53 @@ export function Heatmap({ scan, selected, highlight }: { scan: ScanState; select
       <div className="legend">
         <span>
           <i style={{ background: "rgba(147,197,253,0.75)" }} />
-          Settled
+          {t("hm.settled")}
         </span>
         <span>
           <i style={{ background: "rgba(252,211,77,0.55)" }} />
-          Partially paid
+          {t("hm.partial")}
         </span>
         <span>
           <i style={{ border: "1px solid rgba(191,212,250,0.7)" }} />
-          Pending
+          {t("hm.pending")}
         </span>
         <span>
           <i style={{ background: "rgba(252,165,165,0.6)" }} />
-          Moved to claimable
+          {t("hm.claimable")}
         </span>
       </div>
     </GlassCard>
   );
 }
 
-function RequestTip({ r, st }: { r: RedeemRequest; st: Status }) {
+const STATUS_KEY = { settled: "hm.settled", partial: "hm.partial", pending: "hm.pending", claimable: "hm.claimable" } as const;
+
+function RequestTip({ r, st, t }: { r: RedeemRequest; st: Status; t: T }) {
   const tone = st === "settled" ? "mint" : st === "partial" ? "warn" : st === "claimable" ? "bad" : "base";
   return (
     <>
       <div className="row">
-        <b>Request #{r.id}</b>
-        <Badge tone={tone}>{st}</Badge>
+        <b>{t("hm.request", { id: r.id })}</b>
+        <Badge tone={tone}>{t(STATUS_KEY[st])}</Badge>
       </div>
       <div className="row">
-        <span className="dim">Locked</span>
+        <span className="dim">{t("hm.locked")}</span>
         <span className="num">{usdc(r.assetsTotal)} USDC</span>
       </div>
       <div className="row">
-        <span className="dim">Remaining</span>
+        <span className="dim">{t("hm.remaining")}</span>
         <span className="num">{usdc(r.assetsRemaining, { digits: 6 })} USDC</span>
       </div>
       <div className="row">
-        <span className="dim">Owner</span>
+        <span className="dim">{t("hm.owner")}</span>
         <span className="mono">{short(r.owner)}</span>
       </div>
       <div className="row">
-        <span className="dim">Requested</span>
+        <span className="dim">{t("hm.requested")}</span>
         <span className="num">{clock(r.requestedAt)}</span>
       </div>
       <div className="row">
-        <span className="dim">Waited</span>
+        <span className="dim">{t("hm.waited")}</span>
         <span className="num">{r.settledAt > 0 ? `${r.settledAt - r.requestedAt}s` : "—"}</span>
       </div>
     </>

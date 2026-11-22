@@ -2,6 +2,7 @@
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { type ChainKey, addrUrl, txUrl } from "../config";
 import { short } from "../format";
+import { useI18n } from "../i18n";
 
 export function GlassCard(props: {
   id?: string;
@@ -14,11 +15,12 @@ export function GlassCard(props: {
   style?: CSSProperties;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   return (
     <section id={props.id} className={`card ${props.highlight ? "highlight" : ""} ${props.className ?? ""}`} style={props.style}>
       {props.error && (
         <span className="card-error" title={props.error}>
-          <Badge tone="bad">RPC error</Badge>
+          <Badge tone="bad">{t("status.rpcError")}</Badge>
         </span>
       )}
       {(props.title || props.right) && (
@@ -140,13 +142,13 @@ export function AddrLink({ chain, address, full }: { chain: ChainKey; address: s
   );
 }
 
-export function CopyButton({ text }: { text: string }) {
+export function CopyButton({ text, title = "Copy" }: { text: string; title?: string }) {
   const [ok, setOk] = useState(false);
   return (
     <button
       type="button"
       className="icon-btn"
-      title="Copy"
+      title={title}
       onClick={() => {
         navigator.clipboard?.writeText(text).then(() => {
           setOk(true);

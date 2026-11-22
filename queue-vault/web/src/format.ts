@@ -2,12 +2,20 @@
 
 const USDC_DECIMALS = 6;
 
+/** 由 I18nProvider 设置：紧凑数字在中文下显示为「4.7万」，英文下为「47K」 */
+let LOCALE = "en-US";
+export function setFormatLocale(lang: "en" | "zh") {
+  LOCALE = lang === "zh" ? "zh-CN" : "en-US";
+}
+export const compactNum = (n: number) =>
+  n >= 10_000 ? n.toLocaleString(LOCALE, { notation: "compact", maximumFractionDigits: 2 }) : n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+
 /** USDC 最小单位 → 带千分位的字符串；compact 用于大数字卡片（1.2M / 35.4K） */
 export function usdc(x: bigint | undefined, opts: { digits?: number; compact?: boolean } = {}): string {
   if (x === undefined) return "—";
   const n = Number(x) / 10 ** USDC_DECIMALS;
   if (opts.compact && Math.abs(n) >= 10_000)
-    return n.toLocaleString("en-US", { notation: "compact", maximumFractionDigits: 2 });
+    return n.toLocaleString(LOCALE, { notation: "compact", maximumFractionDigits: 2 });
   return n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: opts.digits ?? 2 });
 }
 
@@ -39,13 +47,16 @@ export function secs(x: number | undefined, sign = true): string {
   return `${sign && x >= 0 ? "+" : ""}${x.toFixed(1)}s`;
 }
 
-export function ago(tsSec: number | undefined, nowMs: number): string {
+type AgoKey = "ago.s" | "ago.s1" | "ago.m" | "ago.h" | "ago.d";
+/** t 由调用方传入（i18n 的 t），避免 format ↔ i18n 循环依赖 */
+export function ago(tsSec: number | undefined, nowMs: number, t: (k: AgoKey, v?: Record<string, number>) => string): string {
   if (!tsSec) return "—";
   const d = Math.max(0, Math.round(nowMs / 1000 - tsSec));
-  if (d < 60) return `${d} second${d === 1 ? "" : "s"} ago`;
-  if (d < 3600) return `${Math.floor(d / 60)} min ago`;
-  if (d < 86_400) return `${Math.floor(d / 3600)} h ago`;
-  return `${Math.floor(d / 86_400)} d ago`;
+  if (d === 1) return t("ago.s1");
+  if (d < 60) return t("ago.s", { n: d });
+  if (d < 3600) return t("ago.m", { n: Math.floor(d / 60) });
+  if (d < 86_400) return t("ago.h", { n: Math.floor(d / 3600) });
+  return t("ago.d", { n: Math.floor(d / 86_400) });
 }
 
 export const clock = (tsSec: number | undefined) => (tsSec ? new Date(tsSec * 1000).toISOString().slice(11, 19) : "—");

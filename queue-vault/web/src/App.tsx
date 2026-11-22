@@ -9,12 +9,14 @@ import { Nav, type SearchHit } from "./components/Nav";
 import { Pipeline } from "./components/Pipeline";
 import { GlassCard } from "./components/ui";
 import { DEPLOYMENTS, NETWORK } from "./config";
+import { useI18n } from "./i18n";
 import { useScan } from "./useScan";
 
 const REPO = (import.meta.env.VITE_REPO_URL as string | undefined) ?? "https://github.com/debugzhao/reactive-hackathon";
 const DOC = `${REPO}/blob/master/docs/${encodeURIComponent("即时结算提款队列-产品与技术方案.md")}`;
 
 export function App() {
+  const { t } = useI18n();
   const scan = useScan();
   const [traceSel, setTraceSel] = useState<string>();
   const [reqSel, setReqSel] = useState<number>();
@@ -57,9 +59,9 @@ export function App() {
       <Hero scan={scan} />
       <main className="container">
         {!DEPLOYMENTS ? (
-          <GlassCard title="No deployment found">
+          <GlassCard title={t("app.noDeploy")}>
             <div className="empty" style={{ textAlign: "left" }}>
-              deployments/{NETWORK}.json does not exist yet. Deploy first, or run the local devnet:
+              {t("app.noDeployDesc", { net: NETWORK })}
               <code className="code">cd queue-vault && bash bin/deploy.sh{"\n"}# or locally:{"\n"}bash bin/devnet.sh && (cd web && npm run dev:devnet)</code>
             </div>
           </GlassCard>
@@ -69,7 +71,7 @@ export function App() {
             {traceSel && (
               <div style={{ textAlign: "right", marginTop: 8 }}>
                 <button type="button" className="pill sm" onClick={() => setTraceSel(undefined)}>
-                  Back to latest repayment
+                  {t("app.back")}
                 </button>
               </div>
             )}
@@ -87,13 +89,13 @@ export function App() {
           <Experiments />
         </div>
         <footer className="footer">
-          <span>All data read live from chain via RPC · no simulated values</span>
+          <span>{t("footer.source")}</span>
           <span style={{ display: "flex", gap: 18 }}>
             <a className="link" href={REPO} target="_blank" rel="noreferrer">
-              Repository
+              {t("footer.repo")}
             </a>
             <a className="link" href={DOC} target="_blank" rel="noreferrer">
-              Design doc
+              {t("footer.doc")}
             </a>
           </span>
         </footer>
