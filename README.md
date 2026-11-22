@@ -3,6 +3,7 @@
 ETHPanda × Reactive Network 两周共学（2026-11-16 → 11-29），对接 Reactive Omni Buildathon。
 
 - `starter/` — clone 即用的「事件 → react() → 回调」三步走模板（Foundry），已在 Sepolia ↔ Lasna 实测跑通
+- `queue-vault/` — 🏁 黑客松项目：即时结算提款队列（赛道 1），合约 + 测试 + 部署脚本 + 实验脚本，见 [queue-vault/README.md](queue-vault/README.md)
 - `docs/cheatsheet.md` — 网络 / 地址 / 费用 / Omni 写法速查表
 - `docs/faq.md` — 学员 FAQ
 

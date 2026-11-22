@@ -1,0 +1,23 @@
+{
+  "name": "queue-vault-bench",
+  "private": true,
+  "type": "module",
+  "description": "延迟基准、抢流动性实验、轮询对照组与报告生成",
+  "scripts": {
+    "bench": "tsx src/bench.ts",
+    "race": "tsx src/race.ts",
+    "poller": "tsx src/poller.ts",
+    "watch": "tsx src/watch.ts",
+    "report": "tsx src/report.ts",
+    "devnet-relay": "tsx src/devnet-relay.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "viem": "^2.58.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

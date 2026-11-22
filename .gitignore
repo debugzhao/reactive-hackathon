@@ -3,3 +3,10 @@ starter/out/
 starter/cache/
 starter/broadcast/
 .DS_Store
+queue-vault/.env
+queue-vault/out/
+queue-vault/cache/
+queue-vault/broadcast/
+
+# 本地冒烟测试的地址，不入库
+queue-vault/deployments/devnet.json

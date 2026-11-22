@@ -4,3 +4,12 @@
 [submodule "starter/lib/forge-std"]
 	path = starter/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
+[submodule "queue-vault/lib/forge-std"]
+	path = queue-vault/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "queue-vault/lib/reactive-lib-omni"]
+	path = queue-vault/lib/reactive-lib-omni
+	url = https://github.com/Reactive-Network/reactive-lib-omni
+[submodule "queue-vault/lib/openzeppelin-contracts"]
+	path = queue-vault/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
