@@ -69,7 +69,7 @@ bash bin/deploy.sh
 # 演示 + 实验（建议）：池中持仓要够跑几十轮，回调预算也要够
 DEMO_DEPOSIT=50000000000 CALLBACK_BUDGET=300 REACTIVE_FUND=10000000000000000000 bash bin/deploy.sh
 
-bash bin/loop.sh          # 排队 2,000 → 还款 2,500 → Reactive 抢回 → 打印三段交易和延迟
+bash bin/loop.sh          # 排队（缓冲现金 + 2,000）→ 还款 2,500 → Reactive 抢回 → 打印三段交易和延迟
 bash bin/status.sh        # 队列、池子、Reactive 预算与欠费、Settler 余额与欠费
 bash bin/trace.sh <tx>    # 给定 Base 上的触发交易，找出 Lasna react 和 Base 回调
 bash bin/verify.sh        # Sourcify 开源验证（Base Sepolia 是否支持 Sourcify 🔎 待核实，备选 Basescan）
@@ -79,7 +79,29 @@ bash bin/verify.sh        # Sourcify 开源验证（Base Sepolia 是否支持 So
 
 ### 链上实测记录
 
-> 待上链后填写：Repaid → react → ReactiveSettled 三笔交易的浏览器链接。
+部署于 2026-11-22（Base Sepolia ↔ Lasna），地址见 [`deployments/testnet.json`](deployments/testnet.json)：
+
+| 合约 | 链 | 地址 |
+|---|---|---|
+| QueueVault | Base Sepolia | [`0x25cE0b41…dF39`](https://sepolia.basescan.org/address/0x25cE0b414e4a1d749232E9e4a844cf84A4c6dF39) |
+| MockPool | Base Sepolia | [`0xE8d67702…39e7`](https://sepolia.basescan.org/address/0xE8d67702EA8674b573c845a7B70B99c4762239e7) |
+| MockUSDC | Base Sepolia | [`0xB75Ce76d…5dd7`](https://sepolia.basescan.org/address/0xB75Ce76da0A6649C45D1474880Aea5eb8eD45dd7) |
+| QueueSettler | Base Sepolia | [`0x2E183a02…6941`](https://sepolia.basescan.org/address/0x2E183a028179c8Ea4DC881478DCb326D244d6941) |
+| QueueReactive | Lasna | [`0x25cE0b41…dF39`](https://lasna.reactscan.net/address/0x25cE0b414e4a1d749232E9e4a844cf84A4c6dF39) |
+
+> QueueVault 和 QueueReactive 地址相同，是因为部署钱包在两条链上的 nonce 恰好相同（CREATE 地址 = f(部署者, nonce)），两者是不同链上的不同合约。
+
+**完整链路 #1**（触发源：排队交易发出的金库快照，Reactive 判断缓冲现金够付 → 回调兑付）
+
+| 段 | 交易 | 区块 | 时间戳 |
+|---|---|---|---|
+| ① Base 排队 `requestRedeem` | [`0x113d9162…1185`](https://sepolia.basescan.org/tx/0x113d916278f0736c609ec618a19507b997a4d980dc2dfb2fb506762f6e3e1185) | 62069778 | 1795335824 |
+| ② Lasna `react` → `SettleRequested` | [`0x21302c24…4ffd`](https://lasna.reactscan.net/tx/0x21302c24f0ee487c1d4812854a0d41d95dfc338cff178824cd2910200cb54ffd) | 8960261 | 1795335823 |
+| ③ Base 回调 `ReactiveSettled` | [`0x82361a1e…eb35`](https://sepolia.basescan.org/tx/0x82361a1e48d309757d56e9beb4a489f40f205c31fd823d980183826e41afeb35) | 62069785 | 1795335825 |
+
+⏱ 链上端到端 **1 秒**（③ − ①）；Base 上相隔 **7 个区块**（约 200ms 一个块，约 1.4 秒）。② 的时间戳比 ① 早 1 秒：两条链的时间戳都是整秒，并且各自取整，跨链相减会出现 ±1s 误差，单看 Base→Lasna 这一段没有意义，以端到端为准。
+
+> 还款触发的链路（Repaid → react → 抢回流动性）待补：第一次演示时 `DEMO_DEPOSIT=50,000` 让缓冲现金（2,500）大于排队金额（2,000），排队当场就被付清，还款时队列已空，Reactive 按设计不回调。`RequestRedeem` 已改为默认排「缓冲现金 + 2,000」。
 
 ## 3. 实验（方案文档第 9 节）
 
@@ -172,6 +194,8 @@ npm run check:abi      # 把 src/abi.ts 每个签名与 forge inspect 的输出�
 | 回调 revert `CallbackNotAuthorized` | Settler 构造时填的 reactive 地址不对，只能重新部署 Settler 再 `SetSettler` |
 | 队首残留几 wei 一直不结清 | 正常现象：池子按秒计息，PPS 每秒都在涨，排队时锁定的金额会比报价多几 wei；下一次出现流动性时会先付清。脚本里排队用 `convertToShares`（Floor）报价，并预留 1 USDC 零头来吸收漂移 |
 | 队列卡住 | 任何人都能兜底：`cast send <vault> "settleQueue(uint256)" 10` |
+| `eth_getLogs is limited to a 200 range`（HTTP 413） | `sepolia.base.org` 每次查日志最多 200 个区块（约 40 秒）。脚本已按 200 块分段查询（`LOG_RANGE` 可调）；换用 Alchemy 等 RPC 可以放宽 |
+| `status.sh` 偶尔 `Operation timed out` | 公共 RPC 抖动，重跑即可；频繁出现就在 `.env` 换一个 Base Sepolia RPC |
 
 ## 7. 局限（诚实说明）
 
