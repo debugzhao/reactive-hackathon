@@ -4,7 +4,23 @@
     {
       "name": "web-devnet",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "queue-vault/web", "run", "dev:devnet"],
+      "runtimeArgs": [
+        "--prefix",
+        "queue-vault/web",
+        "run",
+        "dev:devnet"
+      ],
+      "port": 5174
+    },
+    {
+      "name": "web-testnet",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "queue-vault/web",
+        "run",
+        "dev"
+      ],
       "port": 5174
     }
   ]
