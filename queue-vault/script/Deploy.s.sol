@@ -166,20 +166,28 @@ contract SetupDemo is Deployments {
     }
 }
 
-/// ⑥ Base Sepolia：排队赎回（默认 2,000 USDC）
+/// ⑥ Base Sepolia：排队赎回（默认 = 缓冲现金 + 2,000 USDC，可用 REDEEM_ASSETS 覆盖）
 ///   REDEEM_ASSETS=2000000000 forge script script/Deploy.s.sol:RequestRedeem --rpc-url $BASE_RPC_URL --broadcast
 contract RequestRedeem is Deployments {
     function run() external {
         uint256 pk = _key();
         address me = vm.addr(pk);
         QueueVault vault = QueueVault(_read(".vault"));
+        MockPool pool = MockPool(_read(".pool"));
+        // 默认排队金额 = 缓冲现金 + 2,000：缓冲只能先付一部分，剩下 2,000 的缺口必须等还款、靠 Reactive 抢回。
+        // 如果只排 2,000 而缓冲更多（DEMO_DEPOSIT 调大时），排队当场就被缓冲付清，后面的还款就没东西可演示了。
+        uint256 assets = vm.envOr("REDEEM_ASSETS", vault.queueCash() + 2_000 * USDC);
         // Floor 换算：锁定的应付金额 ≤ 请求金额（previewWithdraw 是 Ceil，会多锁几 wei）
-        uint256 shares = vault.convertToShares(vm.envOr("REDEEM_ASSETS", uint256(2_000 * USDC)));
+        uint256 shares = vault.convertToShares(assets);
+        uint256 idle = pool.liquidity();
 
         vm.startBroadcast(pk);
+        // 上一轮演示剩在池里的流动性先借走，恢复满利用率，保证接下来出现的流动性只来自这一次还款
+        if (idle > 0) pool.borrow(idle);
         uint256 id = vault.requestRedeem(shares, me, me);
         vm.stopBroadcast();
         console.log("request id", id);
+        console.log("assets   ", assets);
     }
 }
 

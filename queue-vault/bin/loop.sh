@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 跑一遍演示链路：排队 2,000 → 等缓冲兑付 → 还款 2,500 → 等 Reactive 抢回并兑付 → 打印三段交易
+# 跑一遍演示链路：排队（缓冲现金 + 2,000）→ 缓冲先付一部分 → 还款 2,500 → 等 Reactive 抢回并兑付 → 打印三段交易
 # 用法：bash bin/loop.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
