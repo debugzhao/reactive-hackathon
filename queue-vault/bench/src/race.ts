@@ -13,6 +13,7 @@ import {
   csvAppend,
   ensureAllowance,
   ensureBalance,
+  getEvents,
   poll,
   poolAbi,
   reactiveAbi,
@@ -44,13 +45,11 @@ async function setReactivePaused(want: boolean) {
 }
 
 async function takenSince(c: Ctx, fromBlock: bigint) {
-  const logs = (await c.base.pub.getContractEvents({
-    address: c.d.pool,
-    abi: poolAbi,
-    eventName: "LiquidityTaken",
+  const logs = await getEvents<{ args: { lender: `0x${string}`; amount: bigint }; transactionHash: `0x${string}` }>(
+    c.base,
+    { address: c.d.pool, abi: poolAbi, eventName: "LiquidityTaken" },
     fromBlock,
-    toBlock: "latest",
-  })) as unknown as { args: { lender: `0x${string}`; amount: bigint }; transactionHash: `0x${string}` }[];
+  );
   let vault = 0n;
   let comp = 0n;
   let vaultTx = "";

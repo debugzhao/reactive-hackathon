@@ -1,7 +1,7 @@
 // 演示看板：实时打印三条时间线（Base 池子 / Lasna Reactive / Base 金库与回调），并以最近一次还款为 0 点显示耗时。
 // 用法：npm run watch
 import type { Abi, Address } from "viem";
-import { type Side, connect, poolAbi, reactiveAbi, settlerAbi, sleep, vaultAbi } from "./lib.js";
+import { type Side, connect, getEvents, poolAbi, reactiveAbi, settlerAbi, sleep, vaultAbi } from "./lib.js";
 
 const ctx = await connect();
 const c = { reset: "\x1b[0m", dim: "\x1b[2m", y: "\x1b[33m", g: "\x1b[32m", m: "\x1b[35m", r: "\x1b[31m", b: "\x1b[36m" };
@@ -72,11 +72,13 @@ for (;;) {
     feeds.map(async (f, i) => {
       const head = await f.side.pub.getBlockNumber();
       if (head < cursors[i]) return;
-      const logs = (await f.side.pub.getContractEvents({ address: f.address, abi: f.abi, fromBlock: cursors[i], toBlock: head })) as unknown as {
-        eventName: string;
-        args: Record<string, unknown>;
-        transactionHash: string;
-      }[];
+      // 不传 eventName = 该合约的所有事件；分段查询，避免落后太多时超出 RPC 的区块跨度限制
+      const logs = await getEvents<{ eventName: string; args: Record<string, unknown>; transactionHash: string }>(
+        f.side,
+        { address: f.address, abi: f.abi },
+        cursors[i],
+        head,
+      );
       cursors[i] = head + 1n;
       for (const l of logs) f.render(l.eventName, l.args, l.transactionHash);
     }),

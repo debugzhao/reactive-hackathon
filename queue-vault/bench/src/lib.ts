@@ -187,17 +187,35 @@ export async function poll<T>(fn: () => Promise<T | undefined>, timeoutMs: numbe
   return undefined;
 }
 
+/** 单次 eth_getLogs 的区块跨度上限。sepolia.base.org 限制 200 个区块（200ms 出块下只有约 40 秒），超出直接报 413 */
+export const LOG_RANGE = BigInt(process.env.LOG_RANGE ?? 199);
+
+type LogQuery = { address: Address; abi: Abi; eventName?: string; args?: Record<string, unknown> };
+
+/** 分段查日志：把 [fromBlock, toBlock] 切成不超过 LOG_RANGE 的小段依次查询 */
+export async function getEvents<T = { transactionHash: Hex; blockNumber: bigint; args: Record<string, unknown> }>(
+  s: Side,
+  q: LogQuery,
+  fromBlock: bigint,
+  toBlock?: bigint,
+): Promise<T[]> {
+  const end = toBlock ?? (await s.pub.getBlockNumber());
+  const out: T[] = [];
+  for (let from = fromBlock; from <= end; from += LOG_RANGE + 1n) {
+    const to = from + LOG_RANGE < end ? from + LOG_RANGE : end;
+    out.push(...((await s.pub.getContractEvents({ ...q, fromBlock: from, toBlock: to } as never)) as unknown as T[]));
+  }
+  return out;
+}
+
 /** 按 originTxHash（indexed uint256）找日志 */
 export async function findByOrigin(s: Side, address: Address, abi: Abi, eventName: string, originTx: Hex, fromBlock: bigint) {
-  const logs = await s.pub.getContractEvents({
-    address,
-    abi,
-    eventName,
-    args: { originTxHash: BigInt(originTx) },
+  const logs = await getEvents<{ transactionHash: Hex; blockNumber: bigint; args: Record<string, bigint> }>(
+    s,
+    { address, abi, eventName, args: { originTxHash: BigInt(originTx) } },
     fromBlock,
-    toBlock: "latest",
-  } as never);
-  return (logs as unknown as { transactionHash: Hex; blockNumber: bigint; args: Record<string, bigint> }[])[0];
+  );
+  return logs[0];
 }
 
 /** 确保 owner 给 spender 的授权足够（实验开始前做一次，避免把 approve 算进延迟） */
