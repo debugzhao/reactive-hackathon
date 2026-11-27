@@ -1,0 +1,10 @@
+{
+  "baseBlock": 62068747,
+  "chainId": 84532,
+  "lasnaBlock": 8960092,
+  "pool": "0xE8d67702EA8674b573c845a7B70B99c4762239e7",
+  "reactive": "0x25cE0b414e4a1d749232E9e4a844cf84A4c6dF39",
+  "settler": "0x2E183a028179c8Ea4DC881478DCb326D244d6941",
+  "usdc": "0xB75Ce76da0A6649C45D1474880Aea5eb8eD45dd7",
+  "vault": "0x25cE0b414e4a1d749232E9e4a844cf84A4c6dF39"
+}
