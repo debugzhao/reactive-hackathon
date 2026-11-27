@@ -20,10 +20,16 @@ if [ -z "$L" ]; then echo "② Lasna  react      未找到（还没执行，或�
 L_TX=$(jq -r .transactionHash <<<"$L"); B1=$(cast to-dec "$(jq -r .blockNumber <<<"$L")"); T1=$(ts "$B1" "$LASNA_RPC_URL")
 echo "② Lasna  react      block $B1  ts $T1  https://lasna.reactscan.net/tx/$L_TX"
 
-BASE_HEAD=$(cast block-number -r "$BASE_RPC_URL")
-S=$(cast logs --json -r "$BASE_RPC_URL" --from-block "$B0" --to-block "$BASE_HEAD" --address "$SETTLER" \
-    "ReactiveSettled(uint256 indexed,uint8,uint256,uint256,uint256,uint256,uint256,uint64)" "$TX" | jq -r '.[0] // empty')
+# sepolia.base.org 的 eth_getLogs 每次最多 200 个区块（约 40 秒），所以从源区块开始按 200 块分段往后找，最多找约 10 分钟
+BASE_HEAD=$(cast block-number -r "$BASE_RPC_URL"); S=""; FROM=$B0
+while [ -z "$S" ] && [ "$FROM" -le "$BASE_HEAD" ] && [ "$FROM" -lt $(( B0 + 3000 )) ]; do
+  TO=$(( FROM + 199 < BASE_HEAD ? FROM + 199 : BASE_HEAD ))
+  S=$(cast logs --json -r "$BASE_RPC_URL" --from-block "$FROM" --to-block "$TO" --address "$SETTLER" \
+      "ReactiveSettled(uint256 indexed,uint8,uint256,uint256,uint256,uint256,uint256,uint64)" "$TX" | jq -r '.[0] // empty')
+  FROM=$(( TO + 1 ))
+done
 if [ -z "$S" ]; then echo "③ Base   回调       未找到（还在投递，或者 Settler 欠费）"; exit 0; fi
 S_TX=$(jq -r .transactionHash <<<"$S"); B2=$(cast to-dec "$(jq -r .blockNumber <<<"$S")"); T2=$(ts "$B2" "$BASE_RPC_URL")
 echo "③ Base   回调落地   block $B2  ts $T2  https://sepolia.basescan.org/tx/$S_TX"
 echo "⏱  Base→Lasna $((T1 - T0))s · Lasna→Base $((T2 - T1))s · 端到端 $((T2 - T0))s（链上时间戳为整秒，精度 ±1s）"
+echo "   Base 区块差 $((B2 - B0)) 个（Base Sepolia 约 200ms 一个块，比整秒时间戳更细）"
