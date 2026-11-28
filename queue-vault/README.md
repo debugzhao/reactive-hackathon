@@ -121,6 +121,7 @@ npm run bench -- --rounds 30 --amount 100       # 延迟基准（不开对手）
 npm run race -- --mode reactive --delays 3,10,30 --rounds 10
 npm run race -- --mode poll --poll-interval 15 --delays 3,10,30 --rounds 10   # 自动暂停/恢复 QueueReactive
 npm run report -- --k 2                          # 生成 results/REPORT.md（含旧版 7s 出块推算）
+npm run history                                  # 导出实验期链上事件 → results/history.json（看板构建时打包）
 ```
 
 | 脚本 | 做什么 | 关键口径 |
@@ -129,6 +130,7 @@ npm run report -- --k 2                          # 生成 results/REPORT.md（�
 | `race.ts` | 对手在还款 T 秒后取走池中全部流动性；统计金库抢到的比例；每轮清场，恢复满利用率 | 抢到率 = 金库从池里取回 ÷ 还款金额 |
 | `poller.ts` | 对照组：每 P 秒检查一次，**和 QueueReactive 用同一条判定规则** | 运行时 Reactive 必须暂停 |
 | `report.ts` | 中位数 / P95（nearest-rank）、抢到率表、旧版推算、Mermaid 图 | 推算明确标注“推算” |
+| `export-history.ts` | 按实验 CSV 定位 Base 区块区间，导出这些区间和 Lasna 全段的原始日志及精确时间戳 | 看板在浏览器里从新往旧回填，离实验越久越慢；预打包后打开即有完整链路和延迟图，实时回填只补导出之后的区块 |
 | `devnet-relay.ts` | ⚠️ 只用于本地：模拟 Reactive 网络，验证脚本本身能跑通 | 延迟是人为设定的，没有实验意义 |
 
 ### 实测结果（2026-11-28，完整报告见 [`bench/results/REPORT.md`](bench/results/REPORT.md)）

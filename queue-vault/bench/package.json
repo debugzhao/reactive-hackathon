@@ -10,7 +10,8 @@
     "watch": "tsx src/watch.ts",
     "report": "tsx src/report.ts",
     "devnet-relay": "tsx src/devnet-relay.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "history": "tsx src/export-history.ts"
   },
   "dependencies": {
     "viem": "^2.58.4"
