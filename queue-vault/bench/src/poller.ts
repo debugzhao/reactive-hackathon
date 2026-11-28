@@ -8,19 +8,27 @@ const MIN_SETTLE = BigInt(process.env.MIN_SETTLE_ASSETS ?? String(100n * USDC));
 
 export type PollerEvent = { tx: `0x${string}`; atMs: number };
 
+/** 最近一次轮询检查的本机时间。race.ts 用它记录「还款时离下一次检查还有多久」，验证相位是否随机 */
+export let lastTickMs = 0;
+
 export function startPoller(ctx: Ctx, intervalMs: number, onSettle?: (e: PollerEvent) => void) {
   let stopped = false;
   let busy = false;
   const tick = async () => {
+    lastTickMs = Date.now();
     if (stopped || busy) return;
     busy = true;
     try {
-      const pending = await read<bigint>(ctx.base, ctx.d.vault, vaultAbi, "pendingCount");
+      // 一个像样的 keeper 会并行读状态：4 个读并发 + 1 个依赖 head 的读，共 2 个 RPC 往返。
+      // 早期版本是 5 次串行读取，实测从检查到结算上链要多花约 2 秒，对照组会被不公平地拖慢
+      const [pending, cash, recallable, head] = await Promise.all([
+        read<bigint>(ctx.base, ctx.d.vault, vaultAbi, "pendingCount"),
+        read<bigint>(ctx.base, ctx.d.vault, vaultAbi, "queueCash"),
+        read<bigint>(ctx.base, ctx.d.pool, poolAbi, "maxWithdraw", [ctx.d.vault]),
+        read<bigint>(ctx.base, ctx.d.vault, vaultAbi, "head"),
+      ]);
       if (pending === 0n) return;
-      const cash = await read<bigint>(ctx.base, ctx.d.vault, vaultAbi, "queueCash");
-      const recallable = await read<bigint>(ctx.base, ctx.d.pool, poolAbi, "maxWithdraw", [ctx.d.vault]);
       // 和 QueueReactive 用同一条判定规则，对照才公平：可兑付现金 ≥ min(队首剩余, 门槛)
-      const head = await read<bigint>(ctx.base, ctx.d.vault, vaultAbi, "head");
       const req = await read<{ assetsRemaining: bigint }>(ctx.base, ctx.d.vault, vaultAbi, "getRequest", [head]);
       const threshold = req.assetsRemaining < MIN_SETTLE ? req.assetsRemaining : MIN_SETTLE;
       if (cash + recallable < threshold) return;

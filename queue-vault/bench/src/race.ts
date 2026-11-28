@@ -23,7 +23,7 @@ import {
   stamp,
   vaultAbi,
 } from "./lib.js";
-import { startPoller } from "./poller.js";
+import { lastTickMs, startPoller } from "./poller.js";
 
 const mode = arg("mode", "reactive");
 const intervalS = Number(arg("poll-interval", "15"));
@@ -74,6 +74,13 @@ if (compPos === 0n) await send(ctx.base, competitor, ctx.d.pool, poolAbi, "depos
 
 await setReactivePaused(mode === "poll");
 const stopPoller = mode === "poll" ? startPoller(ctx, intervalS * 1000) : () => {};
+// Ctrl+C 时 finally 不会执行：在这里兜底恢复 Reactive，避免它一直停在暂停状态
+process.once("SIGINT", async () => {
+  console.log("\n  收到 Ctrl+C，正在收尾…");
+  stopPoller();
+  if (mode === "poll") await setReactivePaused(false).catch((e) => console.error("  恢复失败，请手动 resume():", e.message));
+  process.exit(130);
+});
 await restoreUtilization(ctx);
 await drainBuffer(ctx);
 
@@ -85,8 +92,14 @@ try {
       await request(ctx, amount);
       await sleep(1_000);
 
+      // 轮询组：随机等待 0~P 秒再还款，让还款时刻相对轮询节拍均匀分布。
+      // 否则每轮的起点由上一轮清场时那次轮询结算决定，还款会被锁在节拍的固定相位上（实测总是刚错过一次检查），结果系统性偏向某一方。
+      if (mode === "poll") await sleep(Math.random() * intervalS * 1000);
+
       const r0 = await repay(ctx, amount);
       const t0 = r0.seenMs;
+      // 还款回执到手时，离轮询机器人下一次检查还有多久（只有轮询组有意义）
+      const pollWait = mode === "poll" ? intervalS * 1000 - ((t0 - lastTickMs) % (intervalS * 1000)) : "";
       const b0 = r0.receipt.blockNumber;
 
       // 对手：看到还款后等 delay 秒，把自己能取的全部取走
@@ -94,9 +107,17 @@ try {
         await sleep(Math.max(0, t0 + delay * 1000 - Date.now()));
         const can = await read<bigint>(ctx.base, ctx.d.pool, poolAbi, "maxWithdraw", [competitor.address]);
         if (can === 0n) return { tx: "", atMs: Date.now() - t0 };
-        const { hash, seenMs } = await send(ctx.base, competitor, ctx.d.pool, poolAbi, "withdraw", [can, competitor.address, competitor.address]);
-        return { tx: hash, atMs: seenMs - t0 };
+        try {
+          const { hash, seenMs } = await send(ctx.base, competitor, ctx.d.pool, poolAbi, "withdraw", [can, competitor.address, competitor.address]);
+          return { tx: hash, atMs: seenMs - t0 };
+        } catch (e) {
+          // 读到 maxWithdraw > 0 之后、交易执行之前，金库先把流动性取走了 → ERC4626ExceededMaxWithdraw (0xfe9cceec)。
+          // 这就是「对手输了这一轮」，不是脚本错误；实际拿到多少以链上 LiquidityTaken 为准
+          console.log(`    对手取款 revert（池子已被先取走）：${(e as Error).message.split("\n")[0].slice(0, 80)}`);
+          return { tx: "", atMs: Date.now() - t0 };
+        }
       })();
+      compDone.catch(() => {}); // 兜底：避免未处理的 rejection 直接杀掉进程（那样 finally 不执行，Reactive 会停在暂停状态）
 
       // 我方：等到金库从池里取回（或窗口结束）
       const windowMs = delay * 1000 + (mode === "poll" ? intervalS * 1000 : 0) + 30_000;
@@ -120,10 +141,11 @@ try {
         vaultSeen_ms: vaultSeen ?? "",
         competitorTx: comp.tx,
         competitor_ms: comp.atMs,
+        poll_wait_ms: pollWait,
       };
       csvAppend(file, row);
       console.log(
-        `  T=${delay}s #${i}  金库抢到 ${(row.capture * 100).toFixed(0)}%（${vaultSeen ?? "—"}ms）  对手 ${Number(taken.comp) / 1e6} USDC（${comp.atMs}ms）`,
+        `  T=${delay}s #${i}  金库抢到 ${(row.capture * 100).toFixed(0)}%（${vaultSeen ?? "—"}ms）  对手 ${Number(taken.comp) / 1e6} USDC（${comp.atMs}ms）${pollWait === "" ? "" : `  距下次轮询 ${pollWait}ms`}`,
       );
 
       // 清场：没抢到的部分由借款人补还、兜底结算；对手把拿到的钱存回去，保持仓位不变
