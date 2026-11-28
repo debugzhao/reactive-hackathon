@@ -101,7 +101,15 @@ bash bin/verify.sh        # Sourcify 开源验证（Base Sepolia 是否支持 So
 
 ⏱ 链上端到端 **1 秒**（③ − ①）；Base 上相隔 **7 个区块**（约 200ms 一个块，约 1.4 秒）。② 的时间戳比 ① 早 1 秒：两条链的时间戳都是整秒，并且各自取整，跨链相减会出现 ±1s 误差，单看 Base→Lasna 这一段没有意义，以端到端为准。
 
-> 还款触发的链路（Repaid → react → 抢回流动性）待补：第一次演示时 `DEMO_DEPOSIT=50,000` 让缓冲现金（2,500）大于排队金额（2,000），排队当场就被付清，还款时队列已空，Reactive 按设计不回调。`RequestRedeem` 已改为默认排「缓冲现金 + 2,000」。
+**完整链路 #2**（触发源：借款人还款 `Repaid`，Reactive 把流动性从池子抢回并兑付；延迟基准第 1 个样本）
+
+| 段 | 交易 |
+|---|---|
+| ① Base 还款 `repay` | [`0x87056af3…f00b`](https://sepolia.basescan.org/tx/0x87056af304ec2c103c1897cb6efed08d0427b215dc69e3ccfa7e22acbaddf00b) |
+| ② Lasna `react` → `SettleRequested` | [`0x91113ef3…9b54`](https://lasna.reactscan.net/tx/0x91113ef37e4326e4c160f99cb5712d856dc846019a04fd0eedfe3b777b1d9b54) |
+| ③ Base 回调 `ReactiveSettled`（含 `Recalled` + `RedeemSettled`） | [`0xc3bb14d1…9d51`](https://sepolia.basescan.org/tx/0xc3bb14d1ca79e22395ab1844cd65a4f0117afab03c2f0d311755d53657419d51) |
+
+另有 30 组同类链路见 [`bench/results/REPORT.md`](bench/results/REPORT.md) 和原始 CSV。
 
 ## 3. 实验（方案文档第 9 节）
 
@@ -122,6 +130,19 @@ npm run report -- --k 2                          # 生成 results/REPORT.md（�
 | `poller.ts` | 对照组：每 P 秒检查一次，**和 QueueReactive 用同一条判定规则** | 运行时 Reactive 必须暂停 |
 | `report.ts` | 中位数 / P95（nearest-rank）、抢到率表、旧版推算、Mermaid 图 | 推算明确标注“推算” |
 | `devnet-relay.ts` | ⚠️ 只用于本地：模拟 Reactive 网络，验证脚本本身能跑通 | 延迟是人为设定的，没有实验意义 |
+
+### 实测结果（2026-11-28，完整报告见 [`bench/results/REPORT.md`](bench/results/REPORT.md)）
+
+| 实验 | 结果 |
+|---|---|
+| 端到端延迟（还款 → Lasna react → Base 回调，n=30，超时 0） | Base 区块差中位数 **5 块（3–8）**，即链上 **≈ 1.0s**，P95 1.6s |
+| 抢流动性：Reactive vs 对手 T=3/10/30s（各 10 轮） | 抢到率 **100% / 100% / 100%**；金库取回中位数 5.5–6 块 ≈ 1.1–1.2s |
+| 抢流动性：轮询 15s 对照组（相位随机，各 10 轮） | 抢到率 **0% / 70% / 100%**；取回中位数 35.5–40 块 ≈ 7.1–8.0s |
+| 抢流动性：旧版约 7s 出块（推算，k=2） | 0% / 0% / 100% |
+
+> 结论：还款后的流动性在约 1–13 秒的窗口里属于先到者。Omni 约 1 秒完成跨链结算，30 轮全胜，且不需要服务器和私钥；轮询能否赢取决于还款时离下一次检查有多久；旧版 7 秒出块（推算）进不了这个窗口。尚未与 WebSocket 实时机器人对比。
+
+> 主指标用 **Base 区块差 × 200ms**：整秒时间戳只有 ±1s 精度；跨链时间戳相减受两条链时钟偏差影响（实测 Base→Lasna 中位数为 −1s）；链下毫秒含公共 RPC 往返（约 +4s），都只作参考。
 
 **本地冒烟测试**：`bash bin/devnet.sh` 一条命令拉起 anvil（chainId 84532）、在 `0x8888…` 放 MockSystem、部署整套合约、运行 devnet-relay，然后按提示跑 bench / race。地址写入 `deployments/devnet.json`，数据写入 `bench/results/devnet/`，都不入库，也不会碰测试网地址。
 
@@ -195,6 +216,7 @@ npm run check:abi      # 把 src/abi.ts 每个签名与 forge inspect 的输出�
 | 队首残留几 wei 一直不结清 | 正常现象：池子按秒计息，PPS 每秒都在涨，排队时锁定的金额会比报价多几 wei；下一次出现流动性时会先付清。脚本里排队用 `convertToShares`（Floor）报价，并预留 1 USDC 零头来吸收漂移 |
 | 队列卡住 | 任何人都能兜底：`cast send <vault> "settleQueue(uint256)" 10` |
 | `eth_getLogs is limited to a 200 range`（HTTP 413） | `sepolia.base.org` 每次查日志最多 200 个区块（约 40 秒）。脚本已按 200 块分段查询（`LOG_RANGE` 可调）；换用 Alchemy 等 RPC 可以放宽 |
+| 脚本往 Lasna 发交易报 `Missing or invalid parameters` | Lasna 节点要求 tip ≥ 1 wei，但 `eth_maxPriorityFeePerGas` / `eth_fillTransaction` 给的是 0（节点原话 `gas tip cap 0, minimum needed 1`）。`bench/src/lib.ts` 已在这类链上自己填 gas 和 1 gwei 小费；forge/cast 默认至少 1 wei，不受影响 |
 | `status.sh` 偶尔 `Operation timed out` | 公共 RPC 抖动，重跑即可；频繁出现就在 `.env` 换一个 Base Sepolia RPC |
 
 ## 7. 局限（诚实说明）
