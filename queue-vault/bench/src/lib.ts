@@ -106,7 +106,8 @@ export const settlerAbi = parseAbi([
 
 // ───────────── 客户端 ─────────────
 
-export type Side = { chain: Chain; pub: PublicClient; rpc: string };
+/** tipFloor：该链建议小费为 0 但节点要求 ≥ 1 wei（Lasna），发交易时要自己填 gas 和费用，见 send() */
+export type Side = { chain: Chain; pub: PublicClient; rpc: string; tipFloor: boolean };
 export type Ctx = {
   base: Side;
   lasna: Side;
@@ -118,14 +119,17 @@ export type Ctx = {
 
 async function side(name: string, rpc: string): Promise<Side> {
   const probe = createPublicClient({ transport: http(rpc) });
-  const id = await probe.getChainId();
+  const [id, tip] = await Promise.all([
+    probe.getChainId(),
+    probe.request({ method: "eth_maxPriorityFeePerGas" }).then(BigInt, () => 1n),
+  ]);
   const chain = defineChain({
     id,
     name,
     nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
     rpcUrls: { default: { http: [rpc] } },
   });
-  return { chain, rpc, pub: createPublicClient({ chain, transport: http(rpc) }) as PublicClient };
+  return { chain, rpc, pub: createPublicClient({ chain, transport: http(rpc) }) as PublicClient, tipFloor: tip === 0n };
 }
 
 function account(key: string): PrivateKeyAccount {
@@ -155,7 +159,18 @@ export async function send(
   args: readonly unknown[] = [],
 ) {
   const w = wallet(s, acct);
-  const hash = await w.writeContract({ address, abi, functionName, args, account: acct, chain: s.chain } as never);
+  const req = { address, abi, functionName, args, account: acct, chain: s.chain };
+  // Lasna 的 eth_maxPriorityFeePerGas / eth_fillTransaction 都给出 tip = 0，但节点拒收 tip < 1 wei 的交易
+  // （"gas tip cap 0, minimum needed 1"）。viem 会直接采用 fillTransaction 的结果，所以这里把 gas 和费用全部自己填好，
+  // 让 viem 跳过 fillTransaction。forge/cast 默认至少给 1 wei，所以部署时没遇到。Base 不受影响，仍走 viem 默认流程。
+  const extra = s.tipFloor
+    ? await (async () => {
+        const [gas, block] = await Promise.all([s.pub.estimateContractGas(req as never), s.pub.getBlock()]);
+        const tip = 1_000_000_000n; // 1 gwei：远高于下限，相对 100 gwei 的 base fee 可以忽略
+        return { gas: (gas * 12n) / 10n, maxPriorityFeePerGas: tip, maxFeePerGas: block.baseFeePerGas! * 2n + tip };
+      })()
+    : {};
+  const hash = await w.writeContract({ ...req, ...extra } as never);
   const receipt = await s.pub.waitForTransactionReceipt({ hash, pollingInterval: 200 });
   const seenMs = Date.now();
   if (receipt.status !== "success") throw new Error(`${functionName} reverted: ${hash}`);
